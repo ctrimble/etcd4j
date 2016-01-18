@@ -56,14 +56,15 @@ public abstract class RetryPolicy {
       state.msBeforeRetry = this.startRetryTime;
     }
 
+    synchronized(state){
     state.uriIndex++;
     if (state.uriIndex >= state.uris.length) {
+      state.uriIndex = 0;
       if (this.shouldRetry(state)) {
         if (logger.isDebugEnabled()) {
           logger.debug(String.format("Retry %s to send command", state.retryCount));
         }
         state.retryCount += 1;
-        state.uriIndex = 0;
         timer.newTimeout(new TimerTask() {
           @Override public void run(Timeout timeout) throws Exception {
             try {
@@ -82,6 +83,7 @@ public abstract class RetryPolicy {
       } catch (IOException e) {
         failHandler.catchException(e);
       }
+    }
     }
   }
 

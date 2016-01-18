@@ -65,7 +65,7 @@ public class EtcdNettyClient implements EtcdClientImpl {
   private final EtcdNettyConfig config;
   private final EtcdSecurityContext securityContext;
 
-  protected int lastWorkingUriIndex = 0;
+  protected volatile int lastWorkingUriIndex = 0;
 
   /**
    * Constructor
@@ -165,7 +165,9 @@ public class EtcdNettyClient implements EtcdClientImpl {
    */
   public <R> EtcdResponsePromise<R> send(final EtcdRequest<R> etcdRequest) throws IOException {
     final ConnectionState connectionState = new ConnectionState(uris);
-    connectionState.uriIndex = lastWorkingUriIndex;
+    synchronized(connectionState) {
+      connectionState.uriIndex = lastWorkingUriIndex;
+    }
 
     if (etcdRequest.getPromise() == null) {
       EtcdResponsePromise<R> responsePromise = new EtcdResponsePromise<>(etcdRequest.getRetryPolicy(), connectionState, new RetryHandler() {
@@ -218,7 +220,9 @@ public class EtcdNettyClient implements EtcdClientImpl {
       logger.debug("Will use environment variable " + ENV_ETCD4J_ENDPOINT + " as uri with value " + endpoint_uri);
       uri = URI.create(endpoint_uri);
     } else {
-      uri = uris[connectionState.uriIndex];
+    	synchronized(connectionState) {
+          uri = uris[connectionState.uriIndex];
+    	}
     }
 
     if(eventLoopGroup.isShuttingDown() || eventLoopGroup.isShutdown()){
@@ -245,7 +249,9 @@ public class EtcdNettyClient implements EtcdClientImpl {
       public void operationComplete(final ChannelFuture f) throws Exception {
         if (!f.isSuccess()) {
           if (logger.isDebugEnabled()) {
-            logger.debug("Connection failed to " + connectionState.uris[connectionState.uriIndex]);
+            synchronized(connectionState) {
+              logger.debug("Connection failed to " + connectionState.uris[connectionState.uriIndex]);
+            }
           }
           etcdRequest.getPromise().handleRetry(f.cause());
           return;
